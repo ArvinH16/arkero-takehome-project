@@ -9,53 +9,56 @@ Build a multi-tenant game day operations platform demonstrating enterprise-grade
 
 ## Current State
 
-- Empty Supabase project (no tables)
-- No application code
-- Architecture docs complete
+- [x] Database schema created (6 tables with RLS)
+- [x] Seed data loaded (2 orgs, 7 users, 11 tasks)
+- [x] Supabase Auth integration (auth_id column, auth-based RLS)
+- [x] Next.js project with shadcn/ui
+- [x] Basic layout components created
+- [x] Auth UI (login/signup pages, middleware, auth context)
+- [ ] Task dashboard
+- [ ] Photo upload
+- [ ] RAG system
 
 ## Desired End State
 
 A working Next.js 14 application with:
-1. **Multi-tenant architecture** - Two orgs (LA Galaxy, Portland Thorns) with RLS isolation
-2. **Feature A: Department-Based Tasks** - LA Galaxy gets department filtering/grouping
-3. **Feature B: Photo Verification** - Portland Thorns requires photo upload for certain tasks
-4. **RAG System** - Tenant-isolated semantic search via pgvector + Gemini API
-5. **Professional UI** - shadcn/ui components, clean dashboard
+1. **Real Supabase Auth** - Login/signup with proper session handling
+2. **Multi-tenant architecture** - Two orgs (LA Galaxy, Portland Thorns) with RLS isolation via `auth.uid()`
+3. **Feature A: Department-Based Tasks** - LA Galaxy gets department filtering/grouping
+4. **Feature B: Photo Verification** - Portland Thorns requires photo upload for certain tasks
+5. **RAG System** - Tenant-isolated semantic search via pgvector + Gemini API
+6. **Professional UI** - shadcn/ui components, clean dashboard
 
 ### Verification Criteria
 - LA Galaxy: department dropdown required, department filters, grouped task view
 - Portland Thorns: photo upload UI, audit log, blocked completion without photo
-- Org switching toggles features appropriately
+- Login as different users shows different data via RLS
 - AI Assistant returns only tenant-scoped results
 
 ## What We're NOT Doing
 
-- Real authentication (mock auth with org switcher)
 - Production deployment
 - Real-time updates
 - Mobile responsiveness
 - Comprehensive error handling
+- Password reset flow (users can sign up fresh)
 
 ---
 
-## Phase 1: Database Schema & Seed Data
+## Phase 1: Database Schema & Seed Data ✅ COMPLETE
 
 ### Overview
 Set up complete database schema with RLS, extensions, and seed data via Supabase MCP.
 
-### 1.1 Enable Extensions
-Apply migration via MCP: `mcp__supabase__apply_migration`
-
-**Migration name**: `enable_extensions`
+### 1.1 Enable Extensions ✅
+**Migration**: `enable_extensions`
 ```sql
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "vector";
 ```
 
-### 1.2 Create Tables
-Apply migration via MCP: `mcp__supabase__apply_migration`
-
-**Migration name**: `create_tables`
+### 1.2 Create Tables ✅
+**Migration**: `create_tables`
 ```sql
 -- Organizations (tenants)
 CREATE TABLE organizations (
@@ -72,9 +75,10 @@ CREATE TABLE organizations (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Users
+-- Users (linked to auth.users via auth_id)
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  auth_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,  -- Links to Supabase Auth
   org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   name TEXT NOT NULL,
@@ -139,6 +143,7 @@ CREATE TABLE embeddings (
 );
 
 -- Indexes
+CREATE INDEX idx_users_auth_id ON users(auth_id);
 CREATE INDEX idx_tasks_org_id ON tasks(org_id);
 CREATE INDEX idx_tasks_department ON tasks(org_id, department);
 CREATE INDEX idx_tasks_status ON tasks(org_id, status);
@@ -148,10 +153,11 @@ CREATE INDEX idx_embeddings_org_content ON embeddings(org_id, content_type);
 CREATE INDEX ON embeddings USING hnsw (embedding vector_cosine_ops);
 ```
 
-### 1.3 Create RLS Policies
-Apply migration via MCP: `mcp__supabase__apply_migration`
+### 1.3 Create RLS Policies (Auth-Based) ✅
+**Migration**: `update_rls_for_supabase_auth`
 
-**Migration name**: `create_rls_policies`
+RLS policies now use `auth.uid()` to get the authenticated user and look up their org/role from public.users:
+
 ```sql
 -- Enable RLS on all tables
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
@@ -161,72 +167,78 @@ ALTER TABLE task_photos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE embeddings ENABLE ROW LEVEL SECURITY;
 
--- Helper functions for RLS context (via request headers)
-CREATE OR REPLACE FUNCTION auth.current_org_id() RETURNS UUID AS $$
-  SELECT COALESCE(
-    (current_setting('request.headers', true)::json->>'x-org-id')::uuid,
-    '00000000-0000-0000-0000-000000000000'::uuid
-  );
-$$ LANGUAGE SQL STABLE;
+-- Auth-based helper functions (use auth.uid() from Supabase Auth)
+CREATE OR REPLACE FUNCTION public.current_user_id() RETURNS UUID AS $$
+  SELECT id FROM public.users WHERE auth_id = auth.uid();
+$$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION auth.current_user_id() RETURNS UUID AS $$
-  SELECT COALESCE(
-    (current_setting('request.headers', true)::json->>'x-user-id')::uuid,
-    '00000000-0000-0000-0000-000000000000'::uuid
-  );
-$$ LANGUAGE SQL STABLE;
+CREATE OR REPLACE FUNCTION public.current_org_id() RETURNS UUID AS $$
+  SELECT org_id FROM public.users WHERE auth_id = auth.uid();
+$$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION auth.current_user_role() RETURNS TEXT AS $$
-  SELECT role FROM users WHERE id = auth.current_user_id();
-$$ LANGUAGE SQL STABLE;
+CREATE OR REPLACE FUNCTION public.current_user_role() RETURNS TEXT AS $$
+  SELECT role FROM public.users WHERE auth_id = auth.uid();
+$$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION auth.current_user_department() RETURNS TEXT AS $$
-  SELECT department FROM users WHERE id = auth.current_user_id();
-$$ LANGUAGE SQL STABLE;
+CREATE OR REPLACE FUNCTION public.current_user_department() RETURNS TEXT AS $$
+  SELECT department FROM public.users WHERE auth_id = auth.uid();
+$$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
 -- Organization policies
-CREATE POLICY "org_select" ON organizations FOR SELECT USING (id = auth.current_org_id());
+CREATE POLICY "org_select" ON organizations FOR SELECT
+  USING (id = public.current_org_id());
 
 -- User policies
-CREATE POLICY "user_select" ON users FOR SELECT USING (org_id = auth.current_org_id());
+CREATE POLICY "user_select" ON users FOR SELECT
+  USING (org_id = public.current_org_id());
 
 -- Task policies (with role-based access)
 CREATE POLICY "task_select" ON tasks FOR SELECT USING (
-  org_id = auth.current_org_id()
+  org_id = public.current_org_id()
   AND (
-    auth.current_user_role() IN ('admin', 'manager')
-    OR (auth.current_user_role() = 'department_head'
-        AND (department = auth.current_user_department() OR department IS NULL))
-    OR auth.current_user_role() = 'staff'
+    public.current_user_role() IN ('admin', 'manager')
+    OR (public.current_user_role() = 'department_head'
+        AND (department = public.current_user_department() OR department IS NULL))
+    OR public.current_user_role() = 'staff'
   )
 );
-CREATE POLICY "task_insert" ON tasks FOR INSERT WITH CHECK (org_id = auth.current_org_id());
+
+CREATE POLICY "task_insert" ON tasks FOR INSERT
+  WITH CHECK (org_id = public.current_org_id());
+
 CREATE POLICY "task_update" ON tasks FOR UPDATE USING (
-  org_id = auth.current_org_id()
+  org_id = public.current_org_id()
   AND (
-    auth.current_user_role() IN ('admin', 'manager')
-    OR (auth.current_user_role() = 'department_head'
-        AND department = auth.current_user_department())
+    public.current_user_role() IN ('admin', 'manager')
+    OR (public.current_user_role() = 'department_head'
+        AND department = public.current_user_department())
   )
 );
 
 -- Photo policies
-CREATE POLICY "photo_select" ON task_photos FOR SELECT USING (org_id = auth.current_org_id());
-CREATE POLICY "photo_insert" ON task_photos FOR INSERT WITH CHECK (org_id = auth.current_org_id());
+CREATE POLICY "photo_select" ON task_photos FOR SELECT
+  USING (org_id = public.current_org_id());
+
+CREATE POLICY "photo_insert" ON task_photos FOR INSERT
+  WITH CHECK (org_id = public.current_org_id());
 
 -- Audit log policies
-CREATE POLICY "audit_select" ON audit_log FOR SELECT USING (org_id = auth.current_org_id());
-CREATE POLICY "audit_insert" ON audit_log FOR INSERT WITH CHECK (org_id = auth.current_org_id());
+CREATE POLICY "audit_select" ON audit_log FOR SELECT
+  USING (org_id = public.current_org_id());
+
+CREATE POLICY "audit_insert" ON audit_log FOR INSERT
+  WITH CHECK (org_id = public.current_org_id());
 
 -- Embedding policies (critical for RAG tenant isolation)
-CREATE POLICY "embedding_select" ON embeddings FOR SELECT USING (org_id = auth.current_org_id());
-CREATE POLICY "embedding_insert" ON embeddings FOR INSERT WITH CHECK (org_id = auth.current_org_id());
+CREATE POLICY "embedding_select" ON embeddings FOR SELECT
+  USING (org_id = public.current_org_id());
+
+CREATE POLICY "embedding_insert" ON embeddings FOR INSERT
+  WITH CHECK (org_id = public.current_org_id());
 ```
 
-### 1.4 Create Database Functions
-Apply migration via MCP: `mcp__supabase__apply_migration`
-
-**Migration name**: `create_functions`
+### 1.4 Create Database Functions ✅
+**Migration**: `create_functions`
 ```sql
 -- Validate task completion (check photo requirement)
 CREATE OR REPLACE FUNCTION validate_task_completion(p_task_id UUID)
@@ -286,98 +298,45 @@ END;
 $$;
 ```
 
-### 1.5 Seed Data
-Execute via MCP: `mcp__supabase__execute_sql`
+### 1.5 Seed Data ✅
+Organizations and users are seeded. Auth users will be created via signup flow.
 
-```sql
--- LA Galaxy (Department feature enabled)
-INSERT INTO organizations (id, name, slug, feature_config) VALUES (
-  '11111111-1111-1111-1111-111111111111',
-  'LA Galaxy',
-  'la-galaxy',
-  '{
-    "features": {
-      "departments": {
-        "enabled": true,
-        "required": true,
-        "list": ["Operations", "Security", "Medical", "Concessions", "Facilities", "Guest Services", "Parking", "Media"]
-      },
-      "photoVerification": { "enabled": false, "requiredForTasks": [] }
-    }
-  }'
-);
+**Test Credentials** (create these accounts via signup):
 
--- Portland Thorns (Photo verification enabled)
-INSERT INTO organizations (id, name, slug, feature_config) VALUES (
-  '22222222-2222-2222-2222-222222222222',
-  'Portland Thorns',
-  'portland-thorns',
-  '{
-    "features": {
-      "departments": { "enabled": false, "required": false, "list": [] },
-      "photoVerification": {
-        "enabled": true,
-        "requiredForTasks": ["security_sweep", "safety_check", "equipment_inspection"]
-      }
-    }
-  }'
-);
+| Organization | Email | Password | Role | Department |
+|-------------|-------|----------|------|------------|
+| LA Galaxy | admin@lagalaxy.com | password123 | admin | - |
+| LA Galaxy | ops@lagalaxy.com | password123 | department_head | Operations |
+| LA Galaxy | security@lagalaxy.com | password123 | department_head | Security |
+| LA Galaxy | medical@lagalaxy.com | password123 | department_head | Medical |
+| Portland Thorns | admin@thorns.com | password123 | admin | - |
+| Portland Thorns | staff1@thorns.com | password123 | staff | - |
+| Portland Thorns | staff2@thorns.com | password123 | staff | - |
 
--- LA Galaxy Users
-INSERT INTO users (id, org_id, email, name, role, department) VALUES
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'admin@lagalaxy.com', 'Sarah Chen', 'admin', NULL),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaab', '11111111-1111-1111-1111-111111111111', 'ops@lagalaxy.com', 'Mike Rodriguez', 'department_head', 'Operations'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaac', '11111111-1111-1111-1111-111111111111', 'security@lagalaxy.com', 'James Wilson', 'department_head', 'Security'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaad', '11111111-1111-1111-1111-111111111111', 'medical@lagalaxy.com', 'Dr. Emily Park', 'department_head', 'Medical');
-
--- Portland Thorns Users
-INSERT INTO users (id, org_id, email, name, role, department) VALUES
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbba', '22222222-2222-2222-2222-222222222222', 'admin@thorns.com', 'Alex Thompson', 'admin', NULL),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', '22222222-2222-2222-2222-222222222222', 'staff1@thorns.com', 'Jordan Lee', 'staff', NULL),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', '22222222-2222-2222-2222-222222222222', 'staff2@thorns.com', 'Casey Morgan', 'staff', NULL);
-
--- LA Galaxy Tasks (with departments)
-INSERT INTO tasks (org_id, title, description, status, priority, department, due_date, created_by) VALUES
-  ('11111111-1111-1111-1111-111111111111', 'Set up VIP parking signs', 'Place directional signs for VIP lot A and B', 'pending', 'high', 'Parking', NOW() + INTERVAL '2 hours', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-  ('11111111-1111-1111-1111-111111111111', 'Stock first aid stations', 'Ensure all 6 stations have full supplies', 'pending', 'urgent', 'Medical', NOW() + INTERVAL '3 hours', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-  ('11111111-1111-1111-1111-111111111111', 'Sweep Section 100-110', 'Pre-game security sweep of lower bowl', 'in_progress', 'high', 'Security', NOW() + INTERVAL '1 hour', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-  ('11111111-1111-1111-1111-111111111111', 'Test PA system', 'Sound check all speakers in main concourse', 'pending', 'medium', 'Operations', NOW() + INTERVAL '4 hours', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-  ('11111111-1111-1111-1111-111111111111', 'Prep concession stands', 'Stock inventory and verify POS systems', 'pending', 'high', 'Concessions', NOW() + INTERVAL '5 hours', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-  ('11111111-1111-1111-1111-111111111111', 'Guest services briefing', 'Team briefing at Gate A', 'completed', 'medium', 'Guest Services', NOW() - INTERVAL '1 hour', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
-
--- Portland Thorns Tasks (with photo requirements)
-INSERT INTO tasks (org_id, title, description, status, priority, requires_photo, due_date, created_by) VALUES
-  ('22222222-2222-2222-2222-222222222222', 'North entrance security sweep', 'Complete sweep and document with photo', 'pending', 'high', true, NOW() + INTERVAL '2 hours', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbba'),
-  ('22222222-2222-2222-2222-222222222222', 'Fire extinguisher check - Level 1', 'Inspect all 12 extinguishers on Level 1', 'pending', 'urgent', true, NOW() + INTERVAL '3 hours', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbba'),
-  ('22222222-2222-2222-2222-222222222222', 'Barrier inspection - Field level', 'Check all barriers are secure', 'in_progress', 'high', true, NOW() + INTERVAL '1 hour', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbba'),
-  ('22222222-2222-2222-2222-222222222222', 'Staff meeting prep', 'Set up meeting room for pre-game briefing', 'pending', 'medium', false, NOW() + INTERVAL '4 hours', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbba'),
-  ('22222222-2222-2222-2222-222222222222', 'Equipment inventory', 'Count and log all safety equipment', 'pending', 'medium', true, NOW() + INTERVAL '5 hours', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbba');
-```
-
-### Success Criteria
+### Success Criteria ✅
 
 #### Automated Verification (via MCP)
 - [x] `mcp__supabase__list_tables` returns 6 tables
 - [x] `mcp__supabase__list_extensions` shows uuid-ossp and vector enabled
 - [x] `mcp__supabase__execute_sql` with `SELECT COUNT(*) FROM organizations` returns 2
 - [x] `mcp__supabase__execute_sql` with `SELECT COUNT(*) FROM tasks` returns 11
+- [x] users table has `auth_id` column
+- [x] RLS helper functions use `auth.uid()` not request headers
 
 ---
 
-## Phase 2: Next.js Project Setup
+## Phase 2: Next.js Project Setup ✅ COMPLETE
 
 ### Overview
 Create Next.js project with all dependencies and initial configuration.
 
-### 2.1 Create Next.js Project
-Run in terminal:
+### 2.1 Create Next.js Project ✅
 ```bash
 cd /Users/arvinhakakian/Code/arkero-takehome-assignment
-npx create-next-app@latest touchline --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
-cd touchline
+npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
 ```
 
-### 2.2 Install Dependencies
+### 2.2 Install Dependencies ✅
 ```bash
 # Supabase
 npm install @supabase/supabase-js @supabase/ssr
@@ -387,7 +346,7 @@ npm install lucide-react class-variance-authority clsx tailwind-merge
 npx shadcn@latest init -d
 
 # shadcn components (batch)
-npx shadcn@latest add button card input label select badge dialog dropdown-menu table tabs avatar separator skeleton toast checkbox textarea
+npx shadcn@latest add button card input label select badge dialog dropdown-menu table tabs avatar separator skeleton sonner checkbox textarea
 
 # Form handling
 npm install react-hook-form @hookform/resolvers zod
@@ -399,7 +358,7 @@ npm install date-fns
 npm install @google/generative-ai
 ```
 
-### 2.3 Create `.env.local`
+### 2.3 Create `.env.local` ✅
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://pkursirhunyfkagmcryr.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<get from mcp__supabase__get_publishable_keys>
@@ -407,20 +366,17 @@ SUPABASE_SERVICE_ROLE_KEY=<get from Supabase dashboard>
 GEMINI_API_KEY=<user provides>
 ```
 
-### 2.4 Files to Create
-
-Create the following files in `touchline/src`:
+### 2.4 Files Created ✅
 
 | Path | Purpose |
 |------|---------|
-| `lib/supabase/client.ts` | Browser Supabase client |
-| `lib/supabase/server.ts` | Server-side Supabase client |
-| `lib/supabase/admin.ts` | Service role client (bypasses RLS) + RLS-aware client |
-| `lib/utils.ts` | cn() helper, formatDate, formatRelativeTime |
-| `types/database.ts` | TypeScript interfaces for all tables |
-| `lib/context/org-context.tsx` | Organization context provider (mock auth) |
+| `src/lib/supabase/client.ts` | Browser Supabase client |
+| `src/lib/supabase/server.ts` | Server-side Supabase client with cookies |
+| `src/lib/supabase/admin.ts` | Service role client (bypasses RLS) |
+| `src/lib/utils.ts` | cn() helper, formatDate, formatRelativeTime |
+| `src/types/database.ts` | TypeScript interfaces for all tables |
 
-### Success Criteria
+### Success Criteria ✅
 
 #### Automated Verification
 - [x] `npm run dev` starts without errors
@@ -429,40 +385,111 @@ Create the following files in `touchline/src`:
 
 ---
 
-## Phase 3: Layout & Feature System
+## Phase 3: Auth & Layout System ✅ COMPLETE
 
 ### Overview
-Build app shell (sidebar, header), org/user switchers, and FeatureGate component.
+Build authentication flow, app shell (sidebar, header), and FeatureGate component.
 
-### 3.1 Files to Create
+### 3.1 Auth Files to Create
 
 | Path | Purpose |
 |------|---------|
-| `app/layout.tsx` | Root layout with OrgProvider |
-| `app/(dashboard)/layout.tsx` | Dashboard layout with Sidebar + Header |
-| `components/layout/sidebar.tsx` | Nav links, conditional Audit Log link |
-| `components/layout/header.tsx` | OrgSwitcher + UserSwitcher |
-| `components/org-switcher.tsx` | Dropdown to switch organizations |
-| `components/user-switcher.tsx` | Dropdown to switch users within org |
-| `components/features/feature-gate.tsx` | Conditional rendering based on feature flags |
-| `lib/features/hooks.ts` | useFeature, useDepartments, usePhotoVerification hooks |
+| `src/middleware.ts` | Supabase auth session refresh middleware |
+| `src/app/(auth)/login/page.tsx` | Login page |
+| `src/app/(auth)/signup/page.tsx` | Signup page with org selection |
+| `src/app/(auth)/layout.tsx` | Auth pages layout (centered card) |
+| `src/lib/actions/auth.ts` | Server actions for login/signup/logout |
 
-### 3.2 Key Implementation Details
+### 3.2 Layout Files to Create
+
+| Path | Purpose |
+|------|---------|
+| `src/app/layout.tsx` | Root layout with Toaster |
+| `src/app/(dashboard)/layout.tsx` | Dashboard layout with Sidebar + Header |
+| `src/components/layout/sidebar.tsx` | Nav links, conditional Audit Log link |
+| `src/components/layout/header.tsx` | User info + Logout button |
+| `src/components/features/feature-gate.tsx` | Conditional rendering based on feature flags |
+| `src/lib/features/hooks.ts` | useFeature, useDepartments, usePhotoVerification hooks |
+| `src/lib/context/auth-context.tsx` | Auth state provider (user, org, loading) |
+
+### 3.3 Key Implementation Details
+
+**Middleware** (`src/middleware.ts`):
+```typescript
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+
+export async function middleware(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({ request })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Redirect to login if not authenticated and trying to access dashboard
+  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/signup')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect to dashboard if authenticated and on auth pages
+  if (user && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup'))) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
+  return supabaseResponse
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+}
+```
+
+**Signup Flow** (Claim Account):
+1. User selects organization (LA Galaxy or Portland Thorns)
+2. User selects their pre-seeded user profile from dropdown (shows users without auth_id)
+3. User creates a password (min 6 characters)
+4. On signup:
+   - Create auth.users entry via `supabase.auth.signUp()` with selected user's email
+   - Update public.users.auth_id with the new auth user's ID
+5. Redirect to dashboard
+
+**Auth Context**:
+```typescript
+// Provides: user (auth.users), profile (public.users), organization, loading, signOut
+// Fetches profile and org after auth state changes
+```
 
 **FeatureGate Component**:
 ```tsx
-// Reads from org.feature_config.features[feature].enabled
+// Reads from organization.feature_config.features[feature].enabled
 // Renders children if enabled, fallback otherwise
 ```
 
 **Sidebar**:
 - Dashboard, Tasks links always visible
 - Audit Log link only visible when `photoVerification.enabled`
-
-**Org Context**:
-- Stores current org + user in localStorage
-- switchOrg() loads org data, auto-selects first admin user
-- switchUser() allows role-based testing
+- Logout button at bottom
 
 ### Success Criteria
 
@@ -471,10 +498,13 @@ Build app shell (sidebar, header), org/user switchers, and FeatureGate component
 - [x] `npm run build` completes
 
 #### Manual Verification
+- [ ] Can sign up as LA Galaxy admin (admin@lagalaxy.com)
+- [ ] Can sign up as Portland Thorns admin (admin@thorns.com)
+- [ ] After signup, auth_id is linked in public.users
+- [ ] Can login with created accounts
 - [ ] Sidebar renders with navigation
-- [ ] Org switcher changes organization
-- [ ] User switcher shows users for current org
-- [ ] Audit Log link only appears for Portland Thorns
+- [ ] Logout works and redirects to login
+- [ ] Audit Log link only appears for Portland Thorns users
 
 ---
 
@@ -487,14 +517,14 @@ Build main dashboard with task list, filtering, task detail page, and CRUD opera
 
 | Path | Purpose |
 |------|---------|
-| `app/(dashboard)/page.tsx` | Dashboard with stats, tasks, AI Assistant |
-| `app/(dashboard)/tasks/page.tsx` | All tasks list with search/filter |
-| `app/(dashboard)/tasks/[id]/page.tsx` | Task detail view |
-| `app/(dashboard)/tasks/new/page.tsx` | Create task form |
-| `components/tasks/task-card.tsx` | Task card with status, priority, badges |
-| `components/tasks/department-filter.tsx` | Department filter chips (LA Galaxy) |
-| `components/tasks/task-status-select.tsx` | Status dropdown |
-| `lib/data/tasks.ts` | Task data fetching functions |
+| `src/app/(dashboard)/page.tsx` | Dashboard with stats, tasks, AI Assistant |
+| `src/app/(dashboard)/tasks/page.tsx` | All tasks list with search/filter |
+| `src/app/(dashboard)/tasks/[id]/page.tsx` | Task detail view |
+| `src/app/(dashboard)/tasks/new/page.tsx` | Create task form |
+| `src/components/tasks/task-card.tsx` | Task card with status, priority, badges |
+| `src/components/tasks/department-filter.tsx` | Department filter chips (LA Galaxy) |
+| `src/components/tasks/task-status-select.tsx` | Status dropdown |
+| `src/lib/actions/tasks.ts` | Server actions for task CRUD |
 
 ### 4.2 Key Implementation Details
 
@@ -520,6 +550,14 @@ Build main dashboard with task list, filtering, task detail page, and CRUD opera
 - FeatureGate shows department dropdown (LA Galaxy, required)
 - FeatureGate shows photo requirement checkbox (Portland Thorns)
 
+**Data Fetching** (uses RLS automatically):
+```typescript
+// Server component - uses server client which has auth session
+const supabase = await createClient()
+const { data: tasks } = await supabase.from('tasks').select('*')
+// RLS automatically filters to current user's org!
+```
+
 ### Success Criteria
 
 #### Automated Verification
@@ -527,12 +565,14 @@ Build main dashboard with task list, filtering, task detail page, and CRUD opera
 - [ ] `npm run build` completes
 
 #### Manual Verification
-- [ ] Dashboard loads with tasks from database
-- [ ] Stats cards show correct counts
+- [ ] Login as LA Galaxy admin → see only LA Galaxy tasks
+- [ ] Login as Portland Thorns admin → see only Portland Thorns tasks
+- [ ] Stats cards show correct counts for logged-in user's org
 - [ ] LA Galaxy: Department filter visible, tasks grouped
 - [ ] Portland Thorns: No department filter, "Photo required" badges visible
 - [ ] Can create tasks with org-specific fields
 - [ ] Task detail page loads
+- [ ] RLS properly isolates data (can't see other org's tasks)
 
 ---
 
@@ -546,15 +586,27 @@ Implement photo upload for Portland Thorns and audit log viewer.
 In Supabase Dashboard:
 1. Go to Storage → Create bucket `task-photos`
 2. Make public (for demo)
-3. Add policy allowing inserts
+3. Add RLS policy for authenticated uploads:
+```sql
+CREATE POLICY "Authenticated users can upload photos"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'task-photos');
+
+CREATE POLICY "Anyone can view photos"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'task-photos');
+```
 
 ### 5.2 Files to Create
 
 | Path | Purpose |
 |------|---------|
-| `components/tasks/photo-upload.tsx` | Drag-drop photo upload |
-| `components/tasks/photo-gallery.tsx` | Display uploaded photos |
-| `app/(dashboard)/audit/page.tsx` | Audit log table |
+| `src/components/tasks/photo-upload.tsx` | Drag-drop photo upload |
+| `src/components/tasks/photo-gallery.tsx` | Display uploaded photos |
+| `src/app/(dashboard)/audit/page.tsx` | Audit log table |
+| `src/lib/actions/photos.ts` | Server actions for photo upload |
 
 ### 5.3 Key Implementation Details
 
@@ -569,7 +621,7 @@ In Supabase Dashboard:
 - After successful upload, re-enable completion
 
 **Audit Log**:
-- Fetch audit_log joined with users
+- Fetch audit_log joined with users (RLS filters to current org automatically)
 - Display time, user, action, entity, metadata
 - Action badges with colors
 - Only accessible when photoVerification enabled (redirect otherwise)
@@ -599,13 +651,13 @@ Implement tenant-isolated semantic search using pgvector embeddings and Gemini A
 
 | Path | Purpose |
 |------|---------|
-| `lib/rag/embeddings.ts` | Generate embeddings via Gemini text-embedding-004 |
-| `lib/rag/search.ts` | Search similar content via pgvector |
-| `lib/rag/query.ts` | RAG query: embed → search → generate response |
-| `lib/rag/sync.ts` | Sync task embeddings on create/update |
-| `app/api/rag/query/route.ts` | POST endpoint for RAG queries |
-| `components/rag/ai-assistant.tsx` | AI chat component |
-| `scripts/seed-embeddings.ts` | Seed embeddings for existing tasks |
+| `src/lib/rag/embeddings.ts` | Generate embeddings via Gemini text-embedding-004 |
+| `src/lib/rag/search.ts` | Search similar content via pgvector |
+| `src/lib/rag/query.ts` | RAG query: embed → search → generate response |
+| `src/lib/rag/sync.ts` | Sync task embeddings on create/update |
+| `src/app/api/rag/query/route.ts` | POST endpoint for RAG queries |
+| `src/components/rag/ai-assistant.tsx` | AI chat component |
+| `src/scripts/seed-embeddings.ts` | Seed embeddings for existing tasks |
 
 ### 6.2 Key Implementation Details
 
@@ -617,13 +669,13 @@ Implement tenant-isolated semantic search using pgvector embeddings and Gemini A
 
 **Vector Search** (via match_documents function):
 ```ts
-// Pass query_org_id to ensure tenant isolation
+// Pass current user's org_id to ensure tenant isolation
 // Returns matching documents with similarity scores
 ```
 
 **RAG Query Flow**:
 1. Generate embedding for user question
-2. Search embeddings (tenant-isolated via org_id)
+2. Search embeddings (tenant-isolated via org_id from current auth user)
 3. Build context from top results
 4. Generate response with Gemini Pro
 5. Return answer + sources + confidence
@@ -668,33 +720,36 @@ Final touches, bug fixes, and verification.
 
 ### 7.1 Tasks
 
-1. Add use-toast hook (if not auto-generated by shadcn)
-2. Add empty state for dashboard (no tasks)
-3. Add loading skeletons
+1. Add loading states and skeletons
+2. Add empty states (no tasks)
+3. Error boundaries for failed queries
 4. Run `npm run lint` and fix issues
 5. Run `npm run build` and fix any errors
 6. Test complete demo flow
 
 ### 7.2 Demo Flow Verification
 
-**LA Galaxy Flow**:
-1. Start with LA Galaxy selected
-2. Show department filter on dashboard
-3. Filter by a department
-4. Create new task (department required)
-5. View task detail
-6. Complete task (no photo needed)
-7. Use AI Assistant: "What tasks are urgent?"
+**LA Galaxy Flow** (login as admin@lagalaxy.com):
+1. See department filter on dashboard
+2. Filter by a department
+3. Create new task (department required)
+4. View task detail
+5. Complete task (no photo needed)
+6. Use AI Assistant: "What tasks are urgent?"
 
-**Portland Thorns Flow**:
-1. Switch to Portland Thorns
-2. Note: no department filter, "Photo required" badges visible
-3. Click photo-required task
-4. Try to complete → blocked
-5. Upload photo
-6. Complete task
-7. View Audit Log
-8. Use AI Assistant: "Summarize pending tasks"
+**Portland Thorns Flow** (login as admin@thorns.com):
+1. Note: no department filter, "Photo required" badges visible
+2. Click photo-required task
+3. Try to complete → blocked with toast message
+4. Upload photo
+5. Complete task
+6. View Audit Log (shows photo upload + completion)
+7. Use AI Assistant: "Summarize pending tasks"
+
+**RLS Verification**:
+1. Login as LA Galaxy → can only see LA Galaxy data
+2. Login as Portland Thorns → can only see Portland Thorns data
+3. Attempt direct API calls → RLS blocks cross-org access
 
 ### Success Criteria
 
@@ -705,7 +760,7 @@ Final touches, bug fixes, and verification.
 #### Manual Verification
 - [ ] Complete LA Galaxy demo flow
 - [ ] Complete Portland Thorns demo flow
-- [ ] Org switching clearly toggles features
+- [ ] RLS properly isolates all data
 - [ ] UI is clean and professional
 
 ---
@@ -714,16 +769,17 @@ Final touches, bug fixes, and verification.
 
 | Phase | Focus | Key Deliverables |
 |-------|-------|------------------|
-| 1 | Database | Schema, RLS, functions, seed data |
-| 2 | Project Setup | Next.js, dependencies, config |
-| 3 | Layout & Features | Shell, switchers, FeatureGate |
+| 1 ✅ | Database | Schema, auth-based RLS, functions, seed data |
+| 2 ✅ | Project Setup | Next.js, dependencies, config |
+| 3 ✅ | Auth & Layout | Login/signup, middleware, sidebar, FeatureGate |
 | 4 | Task Dashboard | CRUD, filtering, task cards |
 | 5 | Photo & Audit | Upload, validation, audit log |
 | 6 | RAG System | Embeddings, search, AI Assistant |
 | 7 | Polish | Bug fixes, demo prep |
 
 **Architecture Highlights for Arkero**:
-- Multi-tenancy with RLS (not WHERE clauses)
+- **Real Supabase Auth** with proper session handling
+- **Multi-tenancy with RLS** using `auth.uid()` (not WHERE clauses or headers)
 - Feature flags via JSONB config
 - RAG with tenant-isolated embeddings
-- Clean React patterns (context, hooks, composition)
+- Clean React patterns (server components, server actions)

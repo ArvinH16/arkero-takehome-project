@@ -1,6 +1,6 @@
 'use client'
 
-import { useOrg } from '@/lib/context/org-context'
+import { useAuth } from '@/lib/context/auth-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -8,7 +8,7 @@ import { FeatureGate } from '@/components/features/feature-gate'
 import { useDepartmentList } from '@/lib/features/hooks'
 
 export default function DashboardPage() {
-  const { organization, user, isLoading } = useOrg()
+  const { organization, profile: user, isLoading } = useAuth()
   const departments = useDepartmentList()
 
   if (isLoading) {

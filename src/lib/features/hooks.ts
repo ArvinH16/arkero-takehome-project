@@ -1,13 +1,13 @@
 'use client'
 
-import { useOrg } from '@/lib/context/org-context'
+import { useAuth } from '@/lib/context/auth-context'
 import type { DepartmentFeatureConfig, PhotoVerificationFeatureConfig } from '@/types/database'
 
 /**
  * Hook to check if a feature is enabled for the current organization
  */
 export function useFeature(feature: 'departments' | 'photoVerification'): boolean {
-  const { isFeatureEnabled } = useOrg()
+  const { isFeatureEnabled } = useAuth()
   return isFeatureEnabled(feature)
 }
 
@@ -16,7 +16,7 @@ export function useFeature(feature: 'departments' | 'photoVerification'): boolea
  * Returns null if departments feature is disabled
  */
 export function useDepartments(): DepartmentFeatureConfig | null {
-  const { getFeatureConfig } = useOrg()
+  const { getFeatureConfig } = useAuth()
   const config = getFeatureConfig()
 
   if (!config) return null
@@ -32,7 +32,7 @@ export function useDepartments(): DepartmentFeatureConfig | null {
  * Returns null if photo verification feature is disabled
  */
 export function usePhotoVerification(): PhotoVerificationFeatureConfig | null {
-  const { getFeatureConfig } = useOrg()
+  const { getFeatureConfig } = useAuth()
   const config = getFeatureConfig()
 
   if (!config) return null
