@@ -467,8 +467,8 @@ Build app shell (sidebar, header), org/user switchers, and FeatureGate component
 ### Success Criteria
 
 #### Automated Verification
-- [ ] `npm run dev` starts without errors
-- [ ] `npm run build` completes
+- [x] `npm run dev` starts without errors
+- [x] `npm run build` completes
 
 #### Manual Verification
 - [ ] Sidebar renders with navigation
