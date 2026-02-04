@@ -581,23 +581,43 @@ const { data: tasks } = await supabase.from('tasks').select('*')
 ### Overview
 Implement photo upload for Portland Thorns and audit log viewer.
 
-### 5.1 Setup Supabase Storage
+### 5.1 Setup Supabase Storage ✅
 
 In Supabase Dashboard:
 1. Go to Storage → Create bucket `task-photos`
-2. Make public (for demo)
-3. Add RLS policy for authenticated uploads:
+2. Keep as **private** bucket (for secure storage per requirements)
+3. Apply RLS policies for tenant-isolated access:
+
 ```sql
-CREATE POLICY "Authenticated users can upload photos"
+-- Only authenticated users from the same org can view photos
+CREATE POLICY "Users can view their org photos"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'task-photos'
+  AND (storage.foldername(name))[1] = (SELECT org_id::text FROM public.users WHERE auth_id = auth.uid())
+);
+
+-- Only authenticated users can upload to their org folder
+CREATE POLICY "Users can upload to their org folder"
 ON storage.objects FOR INSERT
 TO authenticated
-WITH CHECK (bucket_id = 'task-photos');
+WITH CHECK (
+  bucket_id = 'task-photos'
+  AND (storage.foldername(name))[1] = (SELECT org_id::text FROM public.users WHERE auth_id = auth.uid())
+);
 
-CREATE POLICY "Anyone can view photos"
-ON storage.objects FOR SELECT
-TO public
-USING (bucket_id = 'task-photos');
+-- Users can delete photos in their org folder
+CREATE POLICY "Users can delete their org photos"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'task-photos'
+  AND (storage.foldername(name))[1] = (SELECT org_id::text FROM public.users WHERE auth_id = auth.uid())
+);
 ```
+
+File path structure: `{org_id}/{task_id}/{timestamp}-{filename}` ensures tenant isolation.
 
 ### 5.2 Files to Create
 
