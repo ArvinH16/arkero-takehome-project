@@ -15,7 +15,7 @@ Build a multi-tenant game day operations platform demonstrating enterprise-grade
 - [x] Next.js project with shadcn/ui
 - [x] Basic layout components created
 - [x] Auth UI (login/signup pages, middleware, auth context)
-- [ ] Task dashboard
+- [x] Task dashboard
 - [ ] Photo upload
 - [ ] RAG system
 
@@ -561,8 +561,8 @@ const { data: tasks } = await supabase.from('tasks').select('*')
 ### Success Criteria
 
 #### Automated Verification
-- [ ] `npm run dev` starts without errors
-- [ ] `npm run build` completes
+- [x] `npm run dev` starts without errors
+- [x] `npm run build` completes
 
 #### Manual Verification
 - [ ] Login as LA Galaxy admin → see only LA Galaxy tasks

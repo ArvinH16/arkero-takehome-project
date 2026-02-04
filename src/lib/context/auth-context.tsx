@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Feature helpers
   const getFeatureConfig = useCallback((): FeatureConfig | null => {
-    return (organization?.feature_config as FeatureConfig | null) || null
+    return (organization?.feature_config as unknown as FeatureConfig | null) || null
   }, [organization])
 
   const isFeatureEnabled = useCallback((feature: 'departments' | 'photoVerification'): boolean => {

@@ -1,148 +1,62 @@
-'use client'
-
-import { useAuth } from '@/lib/context/auth-context'
+import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import { FeatureGate } from '@/components/features/feature-gate'
-import { useDepartmentList } from '@/lib/features/hooks'
+import { Button } from '@/components/ui/button'
+import { Plus, ListTodo, Clock, CheckCircle, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { DashboardClient } from './dashboard-client'
+import type { Task, Organization, User } from '@/types/database'
 
-export default function DashboardPage() {
-  const { organization, profile: user, isLoading } = useAuth()
-  const departments = useDepartmentList()
+export default async function DashboardPage() {
+  const supabase = await createClient()
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
-        </div>
-      </div>
-    )
+  // Get auth user
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  if (!authUser) {
+    redirect('/login')
+  }
+
+  // Get profile
+  const { data: profile } = await supabase
+    .from('users')
+    .select('*')
+    .eq('auth_id', authUser.id)
+    .single()
+
+  if (!profile) {
+    redirect('/login')
+  }
+
+  // Get organization
+  const { data: organization } = await supabase
+    .from('organizations')
+    .select('*')
+    .eq('id', profile.org_id)
+    .single()
+
+  // Get tasks (RLS automatically filters to current org)
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  const taskList = tasks || []
+
+  // Calculate stats
+  const stats = {
+    total: taskList.length,
+    pending: taskList.filter(t => t.status === 'pending').length,
+    in_progress: taskList.filter(t => t.status === 'in_progress').length,
+    completed: taskList.filter(t => t.status === 'completed').length,
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome back, {user?.name || 'User'}
-        </p>
-      </div>
-
-      {/* Organization Info Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Current Organization</CardTitle>
-          <CardDescription>
-            You are viewing data for {organization?.name}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{organization?.slug}</Badge>
-
-            {/* Feature badges */}
-            <FeatureGate feature="departments">
-              <Badge className="bg-blue-100 text-blue-800">
-                Departments Enabled
-              </Badge>
-            </FeatureGate>
-
-            <FeatureGate feature="photoVerification">
-              <Badge className="bg-amber-100 text-amber-800">
-                Photo Verification Enabled
-              </Badge>
-            </FeatureGate>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Department List (only visible for LA Galaxy with departments feature) */}
-      <FeatureGate feature="departments">
-        <Card>
-          <CardHeader>
-            <CardTitle>Departments</CardTitle>
-            <CardDescription>
-              Available departments in your organization
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {departments.map((dept) => (
-                <Badge key={dept} variant="secondary">
-                  {dept}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </FeatureGate>
-
-      {/* Photo Verification Info (only visible for Portland Thorns) */}
-      <FeatureGate feature="photoVerification">
-        <Card>
-          <CardHeader>
-            <CardTitle>Photo Verification</CardTitle>
-            <CardDescription>
-              Tasks requiring photo documentation before completion
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Certain tasks in your organization require photo verification
-              before they can be marked as complete. Look for the camera icon
-              on task cards.
-            </p>
-          </CardContent>
-        </Card>
-      </FeatureGate>
-
-      {/* Placeholder for stats - will be implemented in Phase 4 */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Tasks</CardDescription>
-            <CardTitle className="text-3xl">-</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              Task counts coming in Phase 4
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Pending</CardDescription>
-            <CardTitle className="text-3xl">-</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Awaiting action</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>In Progress</CardDescription>
-            <CardTitle className="text-3xl">-</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Being worked on</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Completed</CardDescription>
-            <CardTitle className="text-3xl">-</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Done today</p>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <DashboardClient
+      organization={organization as Organization}
+      profile={profile as User}
+      tasks={taskList as Task[]}
+      stats={stats}
+    />
   )
 }
