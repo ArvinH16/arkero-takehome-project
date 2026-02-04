@@ -423,9 +423,9 @@ Create the following files in `touchline/src`:
 ### Success Criteria
 
 #### Automated Verification
-- [ ] `npm run dev` starts without errors
-- [ ] `npm run build` completes successfully
-- [ ] No TypeScript errors
+- [x] `npm run dev` starts without errors
+- [x] `npm run build` completes successfully
+- [x] No TypeScript errors
 
 ---
 
