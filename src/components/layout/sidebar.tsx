@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, CheckSquare, ClipboardList, Zap } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, ClipboardList, Zap, BarChart3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FeatureGate } from '@/components/features/feature-gate'
 
@@ -65,6 +65,22 @@ export function Sidebar() {
             >
               <ClipboardList className="h-4 w-4" />
               Audit Log
+            </Link>
+          </FeatureGate>
+
+          {/* Department Metrics - only visible when departments feature is enabled */}
+          <FeatureGate feature="departments">
+            <Link
+              href="/metrics"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                pathname === '/metrics'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              <BarChart3 className="h-4 w-4" />
+              Metrics
             </Link>
           </FeatureGate>
         </nav>

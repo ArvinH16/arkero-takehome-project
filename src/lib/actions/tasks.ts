@@ -348,6 +348,87 @@ export async function getTasksByDepartment(): Promise<{
   return { grouped, error: null }
 }
 
+export interface DepartmentMetrics {
+  department: string
+  total: number
+  pending: number
+  in_progress: number
+  completed: number
+  blocked: number
+  completionRate: number // 0-100
+}
+
+export interface DepartmentMetricsResponse {
+  departments: DepartmentMetrics[]
+  summary: {
+    total: number
+    pending: number
+    in_progress: number
+    completed: number
+    blocked: number
+    completionRate: number
+  }
+  error: string | null
+}
+
+/**
+ * Get metrics grouped by department for executive dashboard
+ */
+export async function getDepartmentMetrics(): Promise<DepartmentMetricsResponse> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('status, department')
+
+  if (error) {
+    console.error('Error fetching department metrics:', error)
+    return {
+      departments: [],
+      summary: { total: 0, pending: 0, in_progress: 0, completed: 0, blocked: 0, completionRate: 0 },
+      error: error.message
+    }
+  }
+
+  const tasks = data || []
+
+  // Group by department
+  const deptMap: Record<string, { total: number; pending: number; in_progress: number; completed: number; blocked: number }> = {}
+
+  tasks.forEach(task => {
+    const dept = task.department || 'Unassigned'
+    if (!deptMap[dept]) {
+      deptMap[dept] = { total: 0, pending: 0, in_progress: 0, completed: 0, blocked: 0 }
+    }
+    deptMap[dept].total++
+    if (task.status === 'pending') deptMap[dept].pending++
+    else if (task.status === 'in_progress') deptMap[dept].in_progress++
+    else if (task.status === 'completed') deptMap[dept].completed++
+    else if (task.status === 'blocked') deptMap[dept].blocked++
+  })
+
+  // Calculate metrics per department
+  const departments: DepartmentMetrics[] = Object.entries(deptMap)
+    .map(([department, counts]) => ({
+      department,
+      ...counts,
+      completionRate: counts.total > 0 ? Math.round((counts.completed / counts.total) * 100) : 0
+    }))
+    .sort((a, b) => a.department.localeCompare(b.department))
+
+  // Calculate org-wide summary
+  const summary = {
+    total: tasks.length,
+    pending: tasks.filter(t => t.status === 'pending').length,
+    in_progress: tasks.filter(t => t.status === 'in_progress').length,
+    completed: tasks.filter(t => t.status === 'completed').length,
+    blocked: tasks.filter(t => t.status === 'blocked').length,
+    completionRate: tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100) : 0
+  }
+
+  return { departments, summary, error: null }
+}
+
 /**
  * Get users in the current organization (for assignment dropdown)
  */
