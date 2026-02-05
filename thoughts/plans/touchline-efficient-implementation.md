@@ -17,7 +17,7 @@ Build a multi-tenant game day operations platform demonstrating enterprise-grade
 - [x] Auth UI (login/signup pages, middleware, auth context)
 - [x] Task dashboard
 - [x] Photo upload
-- [ ] RAG system
+- [x] RAG system
 
 ## Desired End State
 
@@ -719,9 +719,9 @@ npx tsx src/scripts/seed-embeddings.ts
 ### Success Criteria
 
 #### Automated Verification
-- [ ] `npm run dev` starts without errors
-- [ ] `npm run build` completes
-- [ ] `mcp__supabase__execute_sql` with `SELECT COUNT(*) FROM embeddings` shows records
+- [x] `npm run dev` starts without errors
+- [x] `npm run build` completes
+- [x] `mcp__supabase__execute_sql` with `SELECT COUNT(*) FROM embeddings` shows records
 
 #### Manual Verification
 - [ ] AI Assistant appears on dashboard
@@ -792,9 +792,9 @@ Final touches, bug fixes, and verification.
 | 1 ✅ | Database | Schema, auth-based RLS, functions, seed data |
 | 2 ✅ | Project Setup | Next.js, dependencies, config |
 | 3 ✅ | Auth & Layout | Login/signup, middleware, sidebar, FeatureGate |
-| 4 | Task Dashboard | CRUD, filtering, task cards |
-| 5 | Photo & Audit | Upload, validation, audit log |
-| 6 | RAG System | Embeddings, search, AI Assistant |
+| 4 ✅ | Task Dashboard | CRUD, filtering, task cards |
+| 5 ✅ | Photo & Audit | Upload, validation, audit log |
+| 6 ✅ | RAG System | Embeddings, search, AI Assistant |
 | 7 | Polish | Bug fixes, demo prep |
 
 **Architecture Highlights for Arkero**:

@@ -9,6 +9,7 @@ import { Plus, ListTodo, Clock, CheckCircle, AlertCircle } from 'lucide-react'
 import { TaskCard } from '@/components/tasks/task-card'
 import { DepartmentFilter } from '@/components/tasks/department-filter'
 import { FeatureGate } from '@/components/features/feature-gate'
+import { AIAssistant } from '@/components/rag/ai-assistant'
 import type { Task, Organization, User, FeatureConfig } from '@/types/database'
 
 interface DashboardClientProps {
@@ -227,6 +228,9 @@ export function DashboardClient({ organization, profile, tasks, stats }: Dashboa
           </div>
         )}
       </div>
+
+      {/* AI Assistant */}
+      <AIAssistant />
     </div>
   )
 }

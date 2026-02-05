@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Task, TaskStatus, TaskPriority } from '@/types/database'
+import { syncTaskEmbedding } from '@/lib/rag/sync'
 
 export interface TasksResponse {
   tasks: Task[]
@@ -208,6 +209,11 @@ export async function createTask(input: CreateTaskInput): Promise<TaskResponse> 
     return { task: null, error: error.message }
   }
 
+  // Sync embedding for the new task (non-blocking)
+  syncTaskEmbedding(data).catch(err => {
+    console.error('Failed to sync task embedding:', err)
+  })
+
   revalidatePath('/tasks')
   revalidatePath('/')
 
@@ -249,6 +255,11 @@ export async function updateTask(id: string, input: UpdateTaskInput): Promise<Ta
     console.error('Error updating task:', error)
     return { task: null, error: error.message }
   }
+
+  // Sync embedding for the updated task (non-blocking)
+  syncTaskEmbedding(data).catch(err => {
+    console.error('Failed to sync task embedding:', err)
+  })
 
   revalidatePath('/tasks')
   revalidatePath(`/tasks/${id}`)
