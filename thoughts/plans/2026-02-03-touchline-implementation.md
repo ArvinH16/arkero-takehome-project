@@ -2764,13 +2764,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const model = genAI.getGenerativeModel({ model: 'text-embedding-004' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' })
   const result = await model.embedContent(text)
   return result.embedding.values
 }
 
 export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-  const model = genAI.getGenerativeModel({ model: 'text-embedding-004' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' })
   const results = await Promise.all(
     texts.map(text => model.embedContent(text))
   )
@@ -3466,7 +3466,7 @@ A demonstration of enterprise-grade multi-tenancy, feature flags, and RAG-ready 
 
 - **Framework**: Next.js 14 (App Router)
 - **Database**: Supabase (PostgreSQL with RLS + pgvector)
-- **AI/RAG**: Google Gemini API (text-embedding-004 + gemini-pro)
+- **AI/RAG**: Google Gemini API (gemini-embedding-001 + gemini-pro)
 - **UI**: Tailwind CSS + shadcn/ui
 - **Language**: TypeScript
 

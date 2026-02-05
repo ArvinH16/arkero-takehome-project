@@ -671,7 +671,7 @@ Implement tenant-isolated semantic search using pgvector embeddings and Gemini A
 
 | Path | Purpose |
 |------|---------|
-| `src/lib/rag/embeddings.ts` | Generate embeddings via Gemini text-embedding-004 |
+| `src/lib/rag/embeddings.ts` | Generate embeddings via Gemini gemini-embedding-001 |
 | `src/lib/rag/search.ts` | Search similar content via pgvector |
 | `src/lib/rag/query.ts` | RAG query: embed → search → generate response |
 | `src/lib/rag/sync.ts` | Sync task embeddings on create/update |
@@ -683,8 +683,8 @@ Implement tenant-isolated semantic search using pgvector embeddings and Gemini A
 
 **Embedding Generation**:
 ```ts
-// Use text-embedding-004 model
-// Returns 768-dimension vector
+// Use gemini-embedding-001 model (text-embedding-004 deprecated Jan 2026)
+// Returns 768-dimension vector (configurable: 768, 1536, or 3072)
 ```
 
 **Vector Search** (via match_documents function):
