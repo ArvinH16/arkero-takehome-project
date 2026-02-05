@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Bot, Send, Sparkles, ExternalLink, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 
 interface Source {
   taskId: string
@@ -29,7 +30,11 @@ const suggestedQuestions = [
   'Summarize tasks by status',
 ]
 
-export function AIAssistant() {
+interface AIAssistantProps {
+  hideHeader?: boolean
+}
+
+export function AIAssistant({ hideHeader = false }: AIAssistantProps) {
   const [query, setQuery] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [response, setResponse] = useState<RAGResponse | null>(null)
@@ -82,16 +87,18 @@ export function AIAssistant() {
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-primary" />
-          <CardTitle className="text-lg">AI Assistant</CardTitle>
-        </div>
-        <CardDescription>
-          Ask questions about your tasks using natural language
-        </CardDescription>
-      </CardHeader>
+    <Card className={cn('w-full', hideHeader && 'border-0 shadow-none')}>
+      {!hideHeader && (
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-primary" />
+            <CardTitle className="text-lg">AI Assistant</CardTitle>
+          </div>
+          <CardDescription>
+            Ask questions about your tasks using natural language
+          </CardDescription>
+        </CardHeader>
+      )}
       <CardContent className="space-y-4">
         {/* Query input */}
         <form onSubmit={handleSubmit} className="flex gap-2">

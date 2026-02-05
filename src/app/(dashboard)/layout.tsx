@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
+import { FloatingAIAssistant } from '@/components/rag/floating-ai-assistant'
 
 export default function DashboardLayout({
   children,
@@ -13,6 +14,7 @@ export default function DashboardLayout({
         <Header />
         <main className="p-6">{children}</main>
       </div>
+      <FloatingAIAssistant />
     </div>
   )
 }
