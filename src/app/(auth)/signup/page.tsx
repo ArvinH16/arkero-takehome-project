@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import type { Organization, User } from '@/types/database'
-import { linkAuthToProfile } from '@/lib/actions/auth'
+import { linkAuthToProfile, linkExistingAuthToProfile } from '@/lib/actions/auth'
 
 export default function SignupPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -106,7 +106,44 @@ export default function SignupPage() {
         },
       })
 
+      // Handle "User already registered" error - attempt recovery by signing in
       if (authError) {
+        if (authError.message.toLowerCase().includes('already registered') ||
+            authError.message.toLowerCase().includes('already been registered')) {
+          // Try to sign in with the provided password - this proves ownership
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: selectedUser.email,
+            password,
+          })
+
+          if (signInError) {
+            // Password doesn't match or other error
+            toast.error('An account already exists with this email. Please sign in instead, or check your password.')
+            return
+          }
+
+          if (signInData.user) {
+            // User authenticated successfully - now link the profile
+            // This is secure because they proved they own the auth account
+            const linkResult = await linkExistingAuthToProfile(
+              selectedUser.id,
+              signInData.user.id,
+              signInData.user.email!
+            )
+
+            if (linkResult.success) {
+              toast.success('Account linked successfully!')
+              router.push('/')
+              router.refresh()
+              return
+            } else {
+              await supabase.auth.signOut()
+              toast.error(linkResult.error || 'Failed to link account')
+              return
+            }
+          }
+        }
+
         toast.error(authError.message)
         return
       }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -33,7 +33,7 @@ interface SignedUpUser {
   org_id: string
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [signedUpUsers, setSignedUpUsers] = useState<SignedUpUser[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState('')
@@ -242,5 +242,20 @@ export default function LoginPage() {
         </CardFooter>
       </form>
     </Card>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <Card>
+        <CardHeader>
+          <CardTitle>Welcome back</CardTitle>
+          <CardDescription>Loading...</CardDescription>
+        </CardHeader>
+      </Card>
+    }>
+      <LoginPageContent />
+    </Suspense>
   )
 }

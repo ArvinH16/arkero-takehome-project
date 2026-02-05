@@ -17,6 +17,7 @@ interface Organization {
   slug: string
 }
 
+
 /**
  * Fetches all organizations (for login/signup dropdowns).
  * Uses admin client to bypass RLS.
@@ -95,15 +96,85 @@ export async function linkAuthToProfile(
   }
 
   // Link the auth user to the profile
-  const { error: updateError } = await supabase
+  const { data: updateData, error: updateError } = await supabase
     .from('users')
     .update({ auth_id: authUserId })
     .eq('id', userRowId)
     .is('auth_id', null) // Extra safety: only update if still unclaimed
+    .select('id, auth_id')
+    .single()
 
   if (updateError) {
     console.error('Failed to link auth user:', updateError)
     return { success: false, error: 'Failed to link account' }
+  }
+
+  if (!updateData || updateData.auth_id !== authUserId) {
+    console.error('Update did not apply - auth_id not set')
+    return { success: false, error: 'Failed to link account - update did not apply' }
+  }
+
+  return { success: true }
+}
+
+/**
+ * Attempts to link an authenticated user to their unlinked profile.
+ * Called when a user has an auth account but the profile link failed previously.
+ *
+ * Security:
+ * - Only links if the user is already authenticated (has valid session)
+ * - Only links if email matches exactly
+ * - Only links if profile is not already claimed
+ * - Uses admin client only to bypass RLS for the UPDATE (necessary since auth_id isn't set yet)
+ */
+export async function linkExistingAuthToProfile(
+  userRowId: string,
+  authUserId: string,
+  authUserEmail: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createAdminClient()
+
+  // Verify the user row exists
+  const { data: userRow, error: fetchError } = await supabase
+    .from('users')
+    .select('id, email, auth_id')
+    .eq('id', userRowId)
+    .single()
+
+  if (fetchError || !userRow) {
+    return { success: false, error: 'User profile not found' }
+  }
+
+  // Security: Ensure emails match exactly
+  if (userRow.email.toLowerCase() !== authUserEmail.toLowerCase()) {
+    return { success: false, error: 'Email mismatch - cannot link this account' }
+  }
+
+  // Security: Check if already claimed by someone else
+  if (userRow.auth_id) {
+    if (userRow.auth_id === authUserId) {
+      return { success: true } // Already linked to this auth user - success
+    }
+    return { success: false, error: 'Profile is already linked to another account' }
+  }
+
+  // Link the auth user to the profile
+  const { data: updateData, error: updateError } = await supabase
+    .from('users')
+    .update({ auth_id: authUserId })
+    .eq('id', userRowId)
+    .is('auth_id', null) // Extra safety: only update if still unclaimed
+    .select('id, auth_id')
+    .single()
+
+  if (updateError) {
+    console.error('Failed to link auth user:', updateError)
+    return { success: false, error: 'Failed to link account' }
+  }
+
+  if (!updateData || updateData.auth_id !== authUserId) {
+    console.error('Update did not apply - auth_id not set')
+    return { success: false, error: 'Failed to link account - update did not apply' }
   }
 
   return { success: true }
