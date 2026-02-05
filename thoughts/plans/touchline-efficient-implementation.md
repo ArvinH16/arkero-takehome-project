@@ -774,8 +774,8 @@ Final touches, bug fixes, and verification.
 ### Success Criteria
 
 #### Automated Verification
-- [ ] `npm run build` passes
-- [ ] `npm run lint` passes
+- [x] `npm run build` passes
+- [x] `npm run lint` passes
 
 #### Manual Verification
 - [ ] Complete LA Galaxy demo flow

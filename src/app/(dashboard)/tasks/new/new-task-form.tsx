@@ -21,15 +21,14 @@ import { toast } from 'sonner'
 import { FeatureGate } from '@/components/features/feature-gate'
 import { DepartmentSelect } from '@/components/tasks/department-filter'
 import { createTask } from '@/lib/actions/tasks'
-import type { Organization, User, FeatureConfig, TaskPriority } from '@/types/database'
+import type { Organization, FeatureConfig, TaskPriority } from '@/types/database'
 
 interface NewTaskFormProps {
   organization: Organization
-  profile: User
   users: Array<{ id: string; name: string; email: string; department: string | null }>
 }
 
-export function NewTaskForm({ organization, profile, users }: NewTaskFormProps) {
+export function NewTaskForm({ organization, users }: NewTaskFormProps) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -46,7 +45,6 @@ export function NewTaskForm({ organization, profile, users }: NewTaskFormProps) 
   const featureConfig = organization.feature_config as unknown as FeatureConfig
   const departmentsEnabled = featureConfig?.features?.departments?.enabled
   const departmentsRequired = featureConfig?.features?.departments?.required
-  const photoVerificationEnabled = featureConfig?.features?.photoVerification?.enabled
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

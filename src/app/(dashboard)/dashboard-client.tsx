@@ -199,7 +199,7 @@ export function DashboardClient({ organization, profile, tasks, stats }: Dashboa
           // Grouped view for LA Galaxy
           <div className="space-y-6">
             {Object.entries(groupedTasks)
-              .filter(([_, tasks]) => tasks.some(t => t.status !== 'completed'))
+              .filter(([, tasks]) => tasks.some(t => t.status !== 'completed'))
               .map(([department, deptTasks]) => (
                 <div key={department}>
                   <h3 className="text-lg font-medium mb-3 flex items-center gap-2">

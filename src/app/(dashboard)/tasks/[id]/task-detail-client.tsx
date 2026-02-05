@@ -15,13 +15,12 @@ import { PhotoUpload } from '@/components/tasks/photo-upload'
 import { PhotoGallery } from '@/components/tasks/photo-gallery'
 import { updateTaskStatus } from '@/lib/actions/tasks'
 import { formatDate, formatRelativeTime } from '@/lib/utils'
-import type { Task, TaskPhoto, Organization, User as UserType, FeatureConfig, TaskStatus } from '@/types/database'
+import type { Task, TaskPhoto, Organization, FeatureConfig, TaskStatus } from '@/types/database'
 
 interface TaskDetailClientProps {
   task: Task
   photos: TaskPhoto[]
   organization: Organization
-  profile: UserType
   users: Array<{ id: string; name: string; email: string; department: string | null }>
 }
 
@@ -29,7 +28,6 @@ export function TaskDetailClient({
   task,
   photos,
   organization,
-  profile,
   users
 }: TaskDetailClientProps) {
   const router = useRouter()

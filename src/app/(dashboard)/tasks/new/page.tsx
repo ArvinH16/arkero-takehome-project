@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { NewTaskForm } from './new-task-form'
-import type { Organization, User } from '@/types/database'
+import type { Organization } from '@/types/database'
 
 export default async function NewTaskPage() {
   const supabase = await createClient()
@@ -39,7 +39,6 @@ export default async function NewTaskPage() {
   return (
     <NewTaskForm
       organization={organization as Organization}
-      profile={profile as User}
       users={users || []}
     />
   )

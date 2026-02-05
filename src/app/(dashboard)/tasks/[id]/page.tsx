@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import { TaskDetailClient } from './task-detail-client'
-import type { Task, Organization, User } from '@/types/database'
+import type { Task, Organization } from '@/types/database'
 
 interface TaskPageProps {
   params: Promise<{ id: string }>
@@ -64,7 +64,6 @@ export default async function TaskPage({ params }: TaskPageProps) {
       task={task as Task}
       photos={photos || []}
       organization={organization as Organization}
-      profile={profile as User}
       users={users || []}
     />
   )
