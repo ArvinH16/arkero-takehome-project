@@ -189,7 +189,7 @@ npm run lint      # Run ESLint
 
 | File | Description |
 |------|-------------|
-| `archtecture.md` | Complete PRD with diagrams and trade-offs |
+| `architecture.md` | Complete PRD with diagrams and trade-offs |
 | `thoughts/plans/` | Phase-by-phase implementation guide |
 | `Arkero Take Home Assignment.pdf` | Original assignment brief |
 

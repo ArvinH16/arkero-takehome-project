@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import type { Task, TaskStatus, TaskPriority } from '@/types/database'
+import type { Task, TaskStatus, TaskPriority, FeatureConfig } from '@/types/database'
 import { syncTaskEmbedding } from '@/lib/rag/sync'
 
 export interface TasksResponse {
@@ -239,7 +239,54 @@ export async function updateTask(id: string, input: UpdateTaskInput): Promise<Ta
   if (input.assigned_to !== undefined) updateData.assigned_to = input.assigned_to
   if (input.status !== undefined) {
     updateData.status = input.status
+
+    // If completing a task, check photo requirements
     if (input.status === 'completed') {
+      // First, get the current task to check if it requires a photo
+      const { data: currentTask, error: taskFetchError } = await supabase
+        .from('tasks')
+        .select('requires_photo, org_id')
+        .eq('id', id)
+        .single()
+
+      if (taskFetchError) {
+        return { task: null, error: 'Failed to fetch task details' }
+      }
+
+      // If task requires photo, check that at least one exists
+      if (currentTask.requires_photo) {
+        // Get org's feature config to check if photoVerification is enabled
+        const { data: org, error: orgError } = await supabase
+          .from('organizations')
+          .select('feature_config')
+          .eq('id', currentTask.org_id)
+          .single()
+
+        if (orgError) {
+          return { task: null, error: 'Failed to fetch organization settings' }
+        }
+
+        const featureConfig = org.feature_config as FeatureConfig | null
+        const photoVerificationEnabled = featureConfig?.features?.photoVerification?.enabled
+
+        if (photoVerificationEnabled) {
+          // Check if photos exist for this task
+          const { data: photos, error: photosError } = await supabase
+            .from('task_photos')
+            .select('id')
+            .eq('task_id', id)
+            .limit(1)
+
+          if (photosError) {
+            return { task: null, error: 'Failed to verify photo requirements' }
+          }
+
+          if (!photos || photos.length === 0) {
+            return { task: null, error: 'Photo required before completing this task' }
+          }
+        }
+      }
+
       updateData.completed_at = new Date().toISOString()
     }
   }

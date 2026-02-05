@@ -3,7 +3,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Organization, User, FeatureConfig } from '@/types/database'
+import type { Organization, User } from '@/types/database'
+import { parseFeatureConfig, type ValidatedFeatureConfig } from '@/lib/validations/feature-config'
 import type { User as AuthUser } from '@supabase/supabase-js'
 
 interface AuthContextType {
@@ -19,7 +20,7 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>
 
   // Feature helpers
-  getFeatureConfig: () => FeatureConfig | null
+  getFeatureConfig: () => ValidatedFeatureConfig | null
   isFeatureEnabled: (feature: 'departments' | 'photoVerification') => boolean
 }
 
@@ -98,8 +99,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [authUser, fetchProfileAndOrg])
 
   // Feature helpers
-  const getFeatureConfig = useCallback((): FeatureConfig | null => {
-    return (organization?.feature_config as unknown as FeatureConfig | null) || null
+  const getFeatureConfig = useCallback((): ValidatedFeatureConfig | null => {
+    if (!organization?.feature_config) return null
+    return parseFeatureConfig(organization.feature_config)
   }, [organization])
 
   const isFeatureEnabled = useCallback((feature: 'departments' | 'photoVerification'): boolean => {
