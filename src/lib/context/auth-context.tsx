@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Organization, User, FeatureConfig } from '@/types/database'
 import type { User as AuthUser } from '@supabase/supabase-js'
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   const supabase = createClient()
 
@@ -80,11 +82,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthUser(null)
       setProfile(null)
       setOrganization(null)
+      router.push('/login')
+      router.refresh()
     } catch (err) {
       console.error('Sign out error:', err)
       setError('Failed to sign out')
     }
-  }, [supabase])
+  }, [supabase, router])
 
   // Refresh profile (useful after linking auth_id)
   const refreshProfile = useCallback(async () => {

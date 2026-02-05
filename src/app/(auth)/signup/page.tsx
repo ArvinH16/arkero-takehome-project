@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import type { Organization, User } from '@/types/database'
+import { linkAuthToProfile } from '@/lib/actions/auth'
 
 export default function SignupPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -115,21 +116,22 @@ export default function SignupPage() {
         return
       }
 
-      // 2. Link auth user to public.users record
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
-        .from('users')
-        .update({ auth_id: authData.user.id })
-        .eq('id', selectedUser.id)
+      // 2. Link auth user to public.users record using server action (bypasses RLS)
+      const linkResult = await linkAuthToProfile(
+        selectedUser.id,
+        authData.user.id,
+        authData.user.email!
+      )
 
-      if (updateError) {
-        console.error('Failed to link auth user:', updateError)
-        // Don't fail completely - user is created, just not linked
-        toast.warning('Account created but profile linking failed. Please contact support.')
-      } else {
-        toast.success('Account created successfully!')
+      if (!linkResult.success) {
+        console.error('Failed to link auth user:', linkResult.error)
+        // Sign out the auth user since profile linking failed
+        await supabase.auth.signOut()
+        toast.error(linkResult.error || 'Failed to link account. Please try again.')
+        return
       }
 
+      toast.success('Account created successfully!')
       router.push('/')
       router.refresh()
     } catch (err) {
