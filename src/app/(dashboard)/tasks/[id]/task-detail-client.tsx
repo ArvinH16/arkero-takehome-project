@@ -11,6 +11,8 @@ import { ArrowLeft, Calendar, User, Clock, Camera, AlertCircle, Building } from 
 import { toast } from 'sonner'
 import { TaskStatusSelect, TaskPriorityBadge } from '@/components/tasks/task-status-select'
 import { FeatureGate } from '@/components/features/feature-gate'
+import { PhotoUpload } from '@/components/tasks/photo-upload'
+import { PhotoGallery } from '@/components/tasks/photo-gallery'
 import { updateTaskStatus } from '@/lib/actions/tasks'
 import { formatDate, formatRelativeTime } from '@/lib/utils'
 import type { Task, TaskPhoto, Organization, User as UserType, FeatureConfig, TaskStatus } from '@/types/database'
@@ -140,33 +142,32 @@ export function TaskDetailClient({
                       : `${photos.length} photo(s) uploaded`}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  {needsPhoto ? (
-                    <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                      <Camera className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground mb-4">
-                        Photo upload will be available in Phase 5
-                      </p>
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
-                        <AlertCircle className="h-4 w-4 inline mr-2" />
-                        You cannot mark this task as completed until a photo is uploaded.
+                <CardContent className="space-y-6">
+                  {/* Photo Upload */}
+                  <PhotoUpload
+                    taskId={task.id}
+                    onUploadComplete={() => router.refresh()}
+                  />
+
+                  {/* Photo Gallery */}
+                  {photos.length > 0 && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h4 className="text-sm font-medium mb-3">Uploaded Photos</h4>
+                        <PhotoGallery
+                          photos={photos}
+                          onPhotoDeleted={() => router.refresh()}
+                        />
                       </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {photos.map(photo => (
-                        <div key={photo.id} className="relative aspect-square rounded-lg overflow-hidden border">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={photo.photo_url}
-                            alt="Task verification photo"
-                            className="object-cover w-full h-full"
-                          />
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-2">
-                            {formatRelativeTime(photo.uploaded_at)}
-                          </div>
-                        </div>
-                      ))}
+                    </>
+                  )}
+
+                  {/* Warning if no photos */}
+                  {needsPhoto && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
+                      <AlertCircle className="h-4 w-4 inline mr-2" />
+                      You cannot mark this task as completed until a photo is uploaded.
                     </div>
                   )}
                 </CardContent>

@@ -16,7 +16,7 @@ Build a multi-tenant game day operations platform demonstrating enterprise-grade
 - [x] Basic layout components created
 - [x] Auth UI (login/signup pages, middleware, auth context)
 - [x] Task dashboard
-- [ ] Photo upload
+- [x] Photo upload
 - [ ] RAG system
 
 ## Desired End State
@@ -649,8 +649,8 @@ File path structure: `{org_id}/{task_id}/{timestamp}-{filename}` ensures tenant 
 ### Success Criteria
 
 #### Automated Verification
-- [ ] `npm run dev` starts without errors
-- [ ] `npm run build` completes
+- [x] `npm run dev` starts without errors
+- [x] `npm run build` completes
 
 #### Manual Verification
 - [ ] Portland Thorns: Photo upload UI appears on photo-required tasks
