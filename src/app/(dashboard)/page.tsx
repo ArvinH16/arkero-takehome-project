@@ -20,7 +20,10 @@ export default async function DashboardPage() {
     .single()
 
   if (!profile) {
-    redirect('/login')
+    // User is authenticated but has no profile - sign them out to break the redirect loop
+    // This can happen if signup partially failed (auth created but profile link failed)
+    await supabase.auth.signOut()
+    redirect('/login?error=no_profile')
   }
 
   // Get organization

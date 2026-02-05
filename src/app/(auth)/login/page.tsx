@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -43,7 +43,16 @@ export default function LoginPage() {
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(true)
   const [isLoadingUsers, setIsLoadingUsers] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+
+  // Show error message if redirected due to missing profile
+  useEffect(() => {
+    const error = searchParams.get('error')
+    if (error === 'no_profile') {
+      toast.error('Your account is not properly set up. Please sign up again or contact support.')
+    }
+  }, [searchParams])
 
   // Load organizations on mount
   useEffect(() => {
